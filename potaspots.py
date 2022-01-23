@@ -30,27 +30,33 @@ try:
     with open('lastid.pkl', mode='rb') as f:
         lastid = pickle.load(f)
 except Exception as e:
-    lastid = 0 
+    lastid = 2036170
 
-for s in spotdata[::-1]:
-    spotid = int(s['spotId'])
-    if spotid > lastid:
-        lastid = spotid
-        ref = s['reference']
-        activator = s['activator']
-        freq = s['frequency']
-        mode = s['mode']
-        park = s['parkName']
-        spotter = s['spotter']
-        comment = s['comments']
-        lat = s['latitude']
-        lon = s['longitude']
-        hhmm= datetime.datetime.fromisoformat(s['spotTime']).strftime('%H:%M')
-        mesg = f'{hhmm} {activator} on {ref}({park}) {freq} {mode} {comment}[{spotter}]'
-        
-        m = re.match(prefix, ref)
-        if m:
-            api.update_status(status=mesg, lat=lat, long=lon)            
+now = datetime.datetime.now()
 
-with open('lastid.pkl', mode='wb') as f:
-    pickle.dump(lastid, f)
+if spotdata:
+    for s in spotdata[::-1]:
+        spotid = int(s['spotId'])
+        if spotid > lastid:
+            lastid = spotid
+            ref = s['reference']
+            activator = s['activator']
+            freq = s['frequency']
+            mode = s['mode']
+            park = s['parkName']
+            spotter = s['spotter']
+            comment = s['comments']
+            lat = s['latitude']
+            lon = s['longitude']
+            hhmm= datetime.datetime.fromisoformat(s['spotTime']).strftime('%H:%M')
+            mesg = f'{hhmm} {activator} on {ref}({park}) {freq} {mode} {comment}[{spotter}]'
+            
+            m = re.match(prefix, ref)
+            if m:
+                api.update_status(status=mesg, lat=lat, long=lon)
+                print(f'Spotted: {mesg} {now}')           
+
+    with open('lastid.pkl', mode='wb') as f:
+        pickle.dump(lastid, f)
+else:
+    print(f'Error: No Spots data available from {potaapi} {now}')
