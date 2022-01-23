@@ -10,7 +10,7 @@ import sys
 from twython import Twython 
 
 prefix = 'JA-*'
-potaapi = 'https://api.pota.us/spot/activator/'
+potaapi = 'https://api.pota.app/spot/activator/'
 
 consumer = ''
 consumer_sec = ''
@@ -50,12 +50,12 @@ if spotdata:
             lon = s['longitude']
             hhmm= datetime.datetime.fromisoformat(s['spotTime']).strftime('%H:%M')
             mesg = f'{hhmm} {activator} on {ref}({park}) {freq} {mode} {comment}[{spotter}]'
-            
+
             m = re.match(prefix, ref)
             if m:
                 api.update_status(status=mesg, lat=lat, long=lon)
-                print(f'Spotted: {mesg} {now}')           
-
+                print(f'Spotted: {mesg} {now}')
+    print(f'Latest spotid:{lastid} {now}')
     with open('lastid.pkl', mode='wb') as f:
         pickle.dump(lastid, f)
 else:
