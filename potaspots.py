@@ -19,11 +19,13 @@ access_sec = ''
 
 api = Twython(consumer, consumer_sec, access, access_sec)
 
+now = datetime.datetime.now()
+
 try:
     spotobj = urllib.request.urlopen(potaapi)
     spotdata = json.loads(spotobj.read())
 except Exception as e:
-    print(e)
+    print(f'Error: {e} {now}')
     sys.exit(-1)
 
 try:
@@ -31,8 +33,6 @@ try:
         lastid = pickle.load(f)
 except Exception as e:
     lastid = 2036170
-
-now = datetime.datetime.now()
 
 if spotdata:
     for s in spotdata[::-1]:
@@ -59,4 +59,4 @@ if spotdata:
     with open('lastid.pkl', mode='wb') as f:
         pickle.dump(lastid, f)
 else:
-    print(f'Error: No Spots data available from {potaapi} {now}')
+    print(f'NoSpots: No spots available from {potaapi} {now}')
