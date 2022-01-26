@@ -34,6 +34,8 @@ try:
 except Exception as e:
     lastid = 2036170
 
+previd = lastid
+
 if spotdata:
     for s in spotdata[::-1]:
         spotid = int(s['spotId'])
@@ -43,20 +45,24 @@ if spotdata:
             activator = s['activator']
             freq = s['frequency']
             mode = s['mode']
-            park = s['parkName']
+            park = s['name']
+            loc  = s['locationDesc']
             spotter = s['spotter']
             comment = s['comments']
             lat = s['latitude']
             lon = s['longitude']
             hhmm= datetime.datetime.fromisoformat(s['spotTime']).strftime('%H:%M')
-            mesg = f'{hhmm} {activator} on {ref}({park}) {freq} {mode} {comment}[{spotter}]'
+            mesg = f'{hhmm} {activator} on {ref}({loc} {park}) {freq} {mode} {comment}[{spotter}]'
 
             m = re.match(prefix, ref)
             if m:
                 api.update_status(status=mesg, lat=lat, long=lon)
                 print(f'Spotted: {mesg} {now}')
-    print(f'Latest spotid:{lastid} {now}')
+
+    if previd != lastid:
+        print(f'Latest spotid:{lastid} {now}')
+
     with open('lastid.pkl', mode='wb') as f:
         pickle.dump(lastid, f)
 else:
-    print(f'NoSpots: No spots available from {potaapi} {now}')
+    print(f'No Spots: {now}')
