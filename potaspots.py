@@ -56,8 +56,11 @@ if spotdata:
 
             m = re.match(prefix, ref)
             if m:
-                api.update_status(status=mesg, lat=lat, long=lon)
-                print(f'Spotted: {mesg} {now}')
+                try:
+                    api.update_status(status=mesg, lat=lat, long=lon)
+                    print(f'Spotted: {mesg} {now}')
+                except TwythonError as e:
+                    print(e)
 
     if previd != lastid:
         print(f'Latest spotid:{lastid} {now}')
