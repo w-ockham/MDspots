@@ -59,12 +59,12 @@ class POTASpotter:
             ref = 'JA-%'
             freq = -1
 
-        lastseen = self.now - 3600
+        lastseen = self.now - 1800
         if len(command) > 1:
             try:
-                lastseen = self.now - 3600 * int(command[1])
+                lastseen = self.now - 60 * int(command[1])
             except ValueError:
-                lastseen = self.now - 3600
+                lastseen = self.now - 1800
 
         if freq > 0:
             q = f"select * from potaspots where utc > {lastseen} and freq <= {freq} and ref like '{ref}'"
@@ -147,6 +147,9 @@ class POTASpotter:
                         rfreq = 0.0
 
                     self.cur.execute(q, (self.now, hhmm, activator, rfreq, mode, ref, park, comment))
+
+                    tlwindow = self.now - 3600 * 6
+                    self.cur.execute(f'delete from potaspots where utc < {tlwindow}')
 
                 if spots:
                     self.lastid = max(int(i['spotId']) for i in spots)
