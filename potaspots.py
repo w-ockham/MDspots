@@ -43,8 +43,9 @@ class POTASpotter:
 
 
     def log(self, mesg):
+        now = datetime.datetime.now()
         with open(self.logdir + self.logfile, mode='a') as f:
-            print(mesg, file=f)
+            print(f'{now}: {mesg}', file=f)
 
     def interp(self, cmd):
         self.now = int(datetime.datetime.utcnow().strftime("%s"))
@@ -83,7 +84,12 @@ class POTASpotter:
         return mesg
 
     def check_dm(self):
-        res = self.api.get_direct_messages()
+        try:
+            res = self.api.get_direct_messages()
+        except TwythonError as e:
+            self.log(e)
+            return
+
         msglist = [ m for m in res["events"] if int(m["created_timestamp"]) > self.lastmsg ]
         if msglist:
             self.lastmsg = max(int(i['created_timestamp']) for i in msglist)
