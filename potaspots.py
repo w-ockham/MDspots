@@ -85,7 +85,8 @@ class POTASpotter:
     def logsearch(self, target, twindow):
         lastseen = self.now - twindow
         mesg = ''
-        count = 0
+        refcount = 0
+        stations = set()
         
         q = f"select distinct callsign, ref from potaspots where utc > {lastseen}"
         if target:
@@ -155,12 +156,13 @@ class POTASpotter:
                 refs += ' SOTA:' + sota
 
             mesg += f"{tm} {call} {ref}{refs} {fr}\n"
-            count += 1
-
-        if count == 0:
+            refcount += 1
+            stations.add(call)
+            
+        if refcount == 0:
             mesg = 'No Logs.'
 
-        return (count, mesg)
+        return (len(stations), refcount, mesg)
     
     def spotsearch(self, target, maxfreq, twindow):
         lastseen = self.now - twindow
@@ -211,7 +213,8 @@ class POTASpotter:
                 break
 
         if logmode:
-            (_, mesg) = self.logsearch(region, twindow)
+            (stns, refs, mesg) = self.logsearch(region, twindow)
+            mesg = f'Activation summary: {stns} stations activated {refs} parks.\n' + mesg
         else:
             (_, mesg) = self.spotsearch(region, maxfreq, twindow)
 
@@ -248,8 +251,8 @@ class POTASpotter:
                     return
             
     def summary(self):
-        (count, mesg) = self.logsearch('JA', self.logwindow * 3600)
-        mesg = f"Today's activation summary: {count} parks\n" +mesg
+        (stns, refs, mesg) = self.logsearch('JA', self.logwindow * 3600)
+        mesg = f"Today's activation summary: {stns} stations activated {refs} parks.\n" +mesg
         res = None
         if count > 0:            
             tm = ''
