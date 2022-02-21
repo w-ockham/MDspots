@@ -81,7 +81,14 @@ class POTASpotter:
         else:
             s = f"{math.floor(f/1000):.0f}"
         return s
-    
+
+    def summary_mesg(self, sc, rc, mesg):
+        pl = lambda x: 's' if x > 1 else ''
+        if sc > 0:
+            return f"Activation summary: {sc} station{pl(sc)} activated {rc} park{pl(rc)}.\n" + mesg
+        else:
+            return  "Activation summary: No activation."
+
     def logsearch(self, target, twindow):
         lastseen = self.now - twindow
         mesg = ''
@@ -159,9 +166,6 @@ class POTASpotter:
             refcount += 1
             stations.add(call)
             
-        if refcount == 0:
-            mesg = 'No Logs.'
-
         return (len(stations), refcount, mesg)
     
     def spotsearch(self, target, maxfreq, twindow):
@@ -214,7 +218,7 @@ class POTASpotter:
 
         if logmode:
             (stns, refs, mesg) = self.logsearch(region, twindow)
-            mesg = f'Activation summary: {stns} stations activated {refs} parks.\n' + mesg
+            mesg = self.summary_mesg(stns, refs, mesg)
         else:
             (_, mesg) = self.spotsearch(region, maxfreq, twindow)
 
@@ -252,10 +256,10 @@ class POTASpotter:
             
     def summary(self):
         (stns, refs, mesg) = self.logsearch('JA', self.logwindow * 3600)
-        mesg = f"Today's activation summary: {stns} stations activated {refs} parks.\n" +mesg
+        mesg = self.summary_mesg(stns, refs, mesg)
         res = None
-        if count > 0:            
-            tm = ''
+        tm = ''
+        if stns > 0:
             for m in mesg.splitlines():
                 if len(tm + m) > 270:
                     res = self.tweet_as_reply(res, tm.rstrip())
