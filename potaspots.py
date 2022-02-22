@@ -93,7 +93,7 @@ class POTASpotter:
     def logsearch(self, target, twindow):
         lastseen = self.now - twindow
         mesg = ''
-        refcount = 0
+        references = set()
         stations = set()
         
         q = f"select distinct callsign, ref from potaspots where utc > {lastseen}"
@@ -118,9 +118,11 @@ class POTASpotter:
                     for cm in re.split('[, ;]', comment):
                         m = re.match('(\w+-\d\d\d\d)', cm)
                         if m:
-                            if ref != m.group(1) and not m.group(1) in nfer:
-                                nfer.append(m.group(1))
-
+                            ref2 = m.group(1)
+                            if ref != ref2 and not ref2 in nfer:
+                                nfer.append(ref2)
+                                references.add(ref2)
+                                
                         m = re.match('(\w+/\w+-\d+)', cm)
                         if m:
                             sota = m.group(1)
@@ -164,10 +166,11 @@ class POTASpotter:
                 refs += ' SOTA:' + sota
 
             mesg += f"{tm} {call} {ref}{refs} {fr}\n"
-            refcount += 1
+
             stations.add(call)
+            references.add(ref)
             
-        return (len(stations), refcount, mesg)
+        return (len(stations), len(references), mesg)
     
     def spotsearch(self, target, maxfreq, twindow):
         lastseen = self.now - twindow
