@@ -82,12 +82,13 @@ class POTASpotter:
             s = f"{math.floor(f/1000):.0f}"
         return s
 
-    def summary_mesg(self, sc, rc, mesg):
+    def summary_mesg(self, t, sc, rc, mesg):
         pl = lambda x: 's' if x > 1 else ''
+        t = int(t)
         if sc > 0:
-            return f"Activation summary: {sc} station{pl(sc)} activated {rc} park{pl(rc)}.\n" + mesg
+            return f"Activation summary for the last {t} hour{pl(t)}: {sc} station{pl(sc)} activated {rc} park{pl(rc)}.\n" + mesg
         else:
-            return  "Activation summary: No activation."
+            return  f"Activation summary for the last {t} hour{pl(t)}: No activation."
 
     def logsearch(self, target, twindow):
         lastseen = self.now - twindow
@@ -212,13 +213,16 @@ class POTASpotter:
                 logmode = True
                 twindow = 12 * 3600
             elif cmd.isdigit():
-                twindow = int(cmd) * 60
+                if logmode:
+                    twindow = int(cmd) * 3600
+                else:
+                    twindow = int(cmd) * 60
             else:
                 break
 
         if logmode:
             (stns, refs, mesg) = self.logsearch(region, twindow)
-            mesg = self.summary_mesg(stns, refs, mesg)
+            mesg = self.summary_mesg(twindow/3600, stns, refs, mesg)
         else:
             (_, mesg) = self.spotsearch(region, maxfreq, twindow)
 
@@ -256,7 +260,7 @@ class POTASpotter:
             
     def summary(self):
         (stns, refs, mesg) = self.logsearch('JA', self.logwindow * 3600)
-        mesg = self.summary_mesg(stns, refs, mesg)
+        mesg = self.summary_mesg(self.logwindow, stns, refs, mesg)
         res = None
         tm = ''
         if stns > 0:
