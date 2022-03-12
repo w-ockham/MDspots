@@ -115,9 +115,11 @@ class POTASpotter:
             for j in self.cur2.execute(q):
                 (_, tm, _, freq, mode, region, _, park, comment, spotter) = j
                 if spotter and spotter in call:
-                    for cm in re.split('[, :;]', comment):
+                    cmlist = re.split('[, :;]', comment)
+                    isnfer = re.search('fer', comment, re.IGNORECASE)
+                    for cm in cmlist:
                         m = re.match('(\w+-\d\d\d\d)', cm)
-                        if m:
+                        if isnfer and m:
                             ref2 = m.group(1)
                             if not 'FF' in ref2 and ref != ref2 and not ref2 in nfer:
                                 nfer.append(ref2)
