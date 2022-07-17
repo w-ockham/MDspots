@@ -61,14 +61,14 @@ class POTASpotter:
                 res = self.api.update_status(status=mesg)
                 self.log(f'Spotted: {mesg}')
             except TwythonError as e:
-                self.log(f'Error: {e} status = {res}')
+                self.log(f'Error: {e}')
                 res = None
         else:
             try:
                 res = self.api.update_status(status=mesg, in_reply_to_status_id=repl_id, auto_populate_reply_metadata=True)
                 self.log(f'Spotted: {mesg}')
             except TwythonError as e:
-                self.log(f'Error: {e} reply_status = {res}')
+                self.log(f'Error: {e}')
                 res = None
         if res:
             return res['id']
