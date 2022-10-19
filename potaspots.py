@@ -20,9 +20,10 @@ access_sec = ''
 myid =  ''
 
 class POTASpotter:
-    def __init__(self, myid, interval=70, tweetat="21:00", logwindow=16, prefix = 'JA-*'):
+    def __init__(self, myid, interval=70, s_interval=600, tweetat="21:00", logwindow=21, prefix='JA-*'):
         self.myid = myid;
         self.interval = interval
+        self.s_interval = s_interval
         self.tweetat = tweetat
         self.logwindow = logwindow
         self.prefix = prefix
@@ -34,6 +35,7 @@ class POTASpotter:
         self.db = sqlite3.connect(self.homedir + 'potaspot.db')
         self.cur = self.db.cursor()
         self.cur2 = self.db.cursor()
+        self.now = int(datetime.datetime.utcnow().strftime("%s"))
 
         try:
             with open(self.homedir + 'lastid.pkl', mode='rb') as f:
@@ -44,7 +46,7 @@ class POTASpotter:
             self.lastid = 0
             self.lastmsg = 0
             
-        q = 'create table if not exists potaspots(utc int, time text, callsign text, freq real, mode text, region text, ref text, park text, comment text, spotter text)'
+        q = 'create table if not exists potaspots(utc int, time text, callsign text, freq real, mode text, region text, ref text, park text, comment text, spotter text, tweeted int)'
         self.cur.execute(q)
         q = 'create index if not exists pota_index on potaspots(utc, callsign, region, ref)'
         self.cur.execute(q)
@@ -90,7 +92,7 @@ class POTASpotter:
         else:
             return  f"Activation summary for the last {t} hour{pl(t)}: No activation."
 
-    def logsearch(self, target, twindow):
+    def logsearch(self, target, locpfx, twindow):
         lastseen = self.now - twindow
         mesg = ''
         references = set()
@@ -106,6 +108,7 @@ class POTASpotter:
             time_out, mode_out, freq_out = None, None, None
             nfer = []
             sota = ''
+            mloc = ''
             lastmode = None
             
             q = f"select * from potaspots where callsign = '{call}' and ref = '{ref}' and utc > {lastseen}"
@@ -113,7 +116,7 @@ class POTASpotter:
                 q += f" and region = '{target}'"
 
             for j in self.cur2.execute(q):
-                (_, tm, _, freq, mode, region, _, park, comment, spotter) = j
+                (_, tm, _, freq, mode, region, _, park, comment, spotter, _) = j
                 if spotter and spotter in call:
                     cmlist = re.split('[, :;]', comment)
                     isnfer = re.search('fer', comment, re.IGNORECASE)
@@ -124,10 +127,15 @@ class POTASpotter:
                             if not 'FF' in ref2 and ref != ref2 and not ref2 in nfer:
                                 nfer.append(ref2)
                                 references.add(ref2)
-                                
+
                         m = re.match('(\w+/\w+-\d+)', cm)
                         if m:
                             sota = m.group(1)
+
+                        if locpfx:
+                            m = re.match(f"({locpfx}-\D+)", cm)
+                            if m:
+                                mloc = m.group(1)
 
                 if not time_in:
                     time_in = tm
@@ -158,13 +166,16 @@ class POTASpotter:
             else:
                 tm = f"{time_in}-{time_out}"
                 fr = f"{freq_in}({mode_in})-{freq_out}({mode_out})"
-        
-            if nfer:
-                refs = ' ' + str(len(nfer)+1) + '-fer: ' + '/'.join(nfer)
+
+            if mloc:
+                refs = ' Loc:' + mloc
             else:
                 refs = ''
+        
+            if nfer:
+                refs +=  ' ' + str(len(nfer)+1) + '-fer:' + '/'.join(nfer)
 
-            if sota != '':
+            if sota:
                 refs += ' SOTA:' + sota
 
             mesg += f"{tm} {call} {ref}{refs} {fr}\n"
@@ -192,7 +203,7 @@ class POTASpotter:
             q = f"select * from potaspots where callsign ='{call}' and ref='{ref}' and utc > {lastseen} order by utc desc"
             l = self.cur2.execute(q)
             e = l.fetchone()
-            (_, tm, call, freq, mode, region, ref, park, comment, spotter) = e
+            (_, tm, call, freq, mode, region, ref, park, comment, spotter, _) = e
             if (mode == comment):
                     comment = ''
             mesg += f"{tm} {ref} {call} {freq} {mode} {comment}\n"
@@ -206,10 +217,11 @@ class POTASpotter:
     def interp(self, cmd):
         self.now = int(datetime.datetime.utcnow().strftime("%s"))
         command = cmd.upper().split()
-        (region, maxfreq, logmode, twindow) = ('JA', None, False, 3600)
+        (region, locpfx, maxfreq, logmode, twindow) = ('JA', None, None, False, 3600)
         for cmd in command:
             if 'JA' in cmd:
                 region = 'JA'
+                locpfx = 'JP'
                 maxfreq = None
             elif 'DX' in cmd:
                 region = None
@@ -226,7 +238,7 @@ class POTASpotter:
                 break
 
         if logmode:
-            (stns, refs, mesg) = self.logsearch(region, twindow)
+            (stns, refs, mesg) = self.logsearch(region, locpfx, twindow)
             mesg = self.summary_mesg(twindow/3600, stns, refs, mesg)
         else:
             (_, mesg) = self.spotsearch(region, maxfreq, twindow)
@@ -264,7 +276,7 @@ class POTASpotter:
                     return
             
     def summary(self):
-        (stns, refs, mesg) = self.logsearch('JA', self.logwindow * 3600)
+        (stns, refs, mesg) = self.logsearch('JA', 'JP', self.logwindow * 3600)
         mesg = self.summary_mesg(self.logwindow, stns, refs, mesg)
         res = None
         tm = ''
@@ -307,23 +319,36 @@ class POTASpotter:
                 hhmm= datetime.datetime.fromisoformat(s['spotTime']).strftime('%H:%M')
                 if (mode == comment):
                     comment = ''
-                mesg = f'{hhmm} {activator} on {ref}({loc} {park}) {freq} {mode} {comment}[{spotter}]'
 
-                m = re.match(self.prefix, ref)
-                if m:
-                    try:
-                        res = self.api.update_status(status=mesg, lat=lat, long=lon)
-                        self.log(f'Spotted id{sid}: {mesg}')
-                    except TwythonError as e:
-                        self.log(f'Warning:{e} status={mesg}')
                             
                 region = ref[0:ref.find('-')]                              
                 try:
                     rfreq = float(freq)
                 except ValueError:
                     rfreq = 0.0
-                q = 'insert into potaspots(utc, time,callsign,freq,mode,region, ref, park, comment, spotter) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                self.cur.execute(q, (self.now, hhmm, activator, rfreq, mode, region, ref, park, comment, spotter))
+
+                if 'GT' in comment or 'RBN' in comment:
+                    q = f"select count(*) from potaspots where utc > {self.now - self.s_interval} and callsign = '{activator}' and ref = '{ref}' and freq = {rfreq} and mode = '{mode}' and tweeted = 1"
+                    self.cur.execute(q)
+                    (count,) = self.cur.fetchall()[0]
+                    if count == 0:
+                        skip_this = False
+                    else:
+                        skip_this = True
+                else:
+                    skip_this = False
+                    
+                m = re.match(self.prefix, ref)
+                if not skip_this and m:
+                    mesg = f'{hhmm} {activator} on {ref}({loc} {park}) {freq} {mode} {comment}[{spotter}]'
+                    try:
+                        res = self.api.update_status(status=mesg, lat=lat, long=lon)
+                        self.log(f'Spotted id{sid}: {mesg}')
+                    except TwythonError as e:
+                        self.log(f'Warning:{e} status={mesg}')
+
+                q = 'insert into potaspots(utc, time, callsign, freq, mode, region, ref, park, comment, spotter, tweeted) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                self.cur.execute(q, (self.now, hhmm, activator, rfreq, mode, region, ref, park, comment, spotter, 0 if skip_this else 1))
                         
                 tlwindow = self.now - 3600 * 24 * 7
                 self.cur.execute(f'delete from potaspots where utc < {tlwindow}')
@@ -352,10 +377,10 @@ class POTASpotter:
             schedule.run_pending()
             time.sleep(10)
         
-
 if __name__ == "__main__":
   spotter = POTASpotter(myid = myid,
-                        interval=70,
+                        interval = 70,
+                        s_interval= 600,
                         tweetat="21:00",
                         prefix='JA-*')
   spotter.run()
