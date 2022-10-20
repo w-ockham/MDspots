@@ -324,7 +324,7 @@ class POTASpotter:
                             
                 region = ref[0:ref.find('-')]                              
                 try:
-                    rfreq = float(freq)
+                    rfreq = round(float(freq),0)
                 except ValueError:
                     rfreq = 0.0
 
