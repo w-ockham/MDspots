@@ -20,10 +20,11 @@ access_sec = ''
 myid =  ''
 
 class POTASpotter:
-    def __init__(self, myid, interval=70, s_interval=600, tweetat="21:00", logwindow=21, prefix='JA-*'):
+    def __init__(self, myid, interval=70, suppress_interval=600, storage_period = 7, tweetat="21:00", logwindow=21, prefix='JA-*'):
         self.myid = myid;
         self.interval = interval
-        self.s_interval = s_interval
+        self.suppress_interval = suppress_interval
+        self.storage_period = storage_period
         self.tweetat = tweetat
         self.logwindow = logwindow
         self.prefix = prefix
@@ -328,7 +329,7 @@ class POTASpotter:
                     rfreq = 0.0
 
                 if 'GT' in comment or 'RBN' in comment:
-                    q = f"select count(*) from potaspots where utc > {self.now - self.s_interval} and callsign = '{activator}' and ref = '{ref}' and freq = {rfreq} and mode = '{mode}' and tweeted = 1"
+                    q = f"select count(*) from potaspots where utc > {self.now - self.suppress_interval} and callsign = '{activator}' and ref = '{ref}' and freq = {rfreq} and mode = '{mode}' and tweeted = 1"
                     self.cur.execute(q)
                     (count,) = self.cur.fetchall()[0]
                     if count == 0:
@@ -350,7 +351,7 @@ class POTASpotter:
                 q = 'insert into potaspots(utc, time, callsign, freq, mode, region, ref, park, comment, spotter, tweeted) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 self.cur.execute(q, (self.now, hhmm, activator, rfreq, mode, region, ref, park, comment, spotter, 0 if skip_this else 1))
                         
-                tlwindow = self.now - 3600 * 24 * 7
+                tlwindow = self.now - 3600 * 24 * self.storage_period
                 self.cur.execute(f'delete from potaspots where utc < {tlwindow}')
 
             if spots:
@@ -380,7 +381,8 @@ class POTASpotter:
 if __name__ == "__main__":
   spotter = POTASpotter(myid = myid,
                         interval = 70,
-                        s_interval= 600,
+                        suppress_interval= 600,
+                        storage_period = 31,
                         tweetat="21:00",
                         prefix='JA-*')
   spotter.run()
