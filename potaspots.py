@@ -230,6 +230,8 @@ class POTASpotter:
             elif 'LOG' in cmd:
                 logmode = True
                 twindow = 12 * 3600
+            elif cmd.isalpha():
+                region = cmd
             elif cmd.isdigit():
                 if logmode:
                     twindow = int(cmd) * 3600
