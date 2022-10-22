@@ -216,9 +216,9 @@ class POTASpotter:
         return (count, mesg)
     
     def stats(self, region, now, twindow):
-        reg_q_all = f"select ref,callsign,count(callsign) from potaspots where region='{region}' and utc > {now - twindow} group by callsign order by utc"
+        reg_q_all = f"select ref,callsign,count(callsign) from potaspots where region='{region}' and utc > {now - twindow} group by ref, callsign order by utc"
         
-        reg_q_tweet = f"select ref,callsign,count(callsign) from potaspots where region='{region}' and tweeted = 1 and utc > {now - twindow} group by callsign"
+        reg_q_tweet = f"select ref,callsign,count(callsign) from potaspots where region='{region}' and tweeted = 1 and utc > {now - twindow} group by ref, callsign"
         refmap= {}
 
         (twtall, spotall) = (0 , 0)
@@ -362,7 +362,6 @@ class POTASpotter:
                 if (mode == comment):
                     comment = ''
 
-                            
                 region = ref[0:ref.find('-')]                              
                 try:
                     rfreq = round(float(freq),0)
