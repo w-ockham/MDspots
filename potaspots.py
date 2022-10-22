@@ -215,10 +215,42 @@ class POTASpotter:
 
         return (count, mesg)
     
+    def stats(self, region, now, twindow):
+        reg_q_all = f"select ref,callsign,count(callsign) from potaspots where region='{region}' and utc > {now - twindow} group by callsign order by utc"
+        
+        reg_q_tweet = f"select ref,callsign,count(callsign) from potaspots where region='{region}' and tweeted = 1 and utc > {now - twindow} group by callsign"
+        refmap= {}
+
+        (twtall, spotall) = (0 , 0)
+        for s in self.cur.execute(reg_q_all):
+            (ref, call, count) = s
+            spotall += count
+            if not ref in refmap:
+                refmap[ref] = {call:(0, count)}
+            else:
+                refmap[ref][call] = (0, count)
+                    
+        for s in self.cur.execute(reg_q_tweet):
+            (ref, call, count) = s
+            twtall += count
+            if ref in refmap and call in refmap[ref]:
+                (_, total) = refmap[ref][call]
+                refmap[ref][call] = (count, total)
+
+        mesg = f"Tweet Rate Last {round(twindow/3600)}H = {round(twtall/spotall*100)}%({twtall}tweets/{spotall}spots)\n"
+        for ref in refmap.keys():
+            mesg += f"{ref}: "
+            for call in refmap[ref].keys():
+                (twt, total) = refmap[ref][call]
+                mesg += f"{call} {round(twt/total*100)}%({twt}/{total}) "
+            mesg += "\n"
+
+        return mesg;
+        
     def interp(self, cmd):
         self.now = int(datetime.datetime.utcnow().strftime("%s"))
         command = cmd.upper().split()
-        (region, locpfx, maxfreq, logmode, twindow) = ('JA', None, None, False, 3600)
+        (region, locpfx, maxfreq, logmode, statmode, twindow) = ('JA', None, None, False, False, 3600)
         for cmd in command:
             if 'JA' in cmd:
                 region = 'JA'
@@ -230,19 +262,26 @@ class POTASpotter:
             elif 'LOG' in cmd:
                 logmode = True
                 twindow = 12 * 3600
+            elif 'STAT' in cmd:
+                statmode = True
+                twindow = 24 * 3600
             elif cmd.isalpha():
                 region = cmd
             elif cmd.isdigit():
-                if logmode:
+                if logmode or statmode:
                     twindow = int(cmd) * 3600
                 else:
                     twindow = int(cmd) * 60
             else:
                 break
 
-        if logmode:
+        if statmode:
+            mesg = self.stats(region, self.now, twindow)
+
+        elif logmode:
             (stns, refs, mesg) = self.logsearch(region, locpfx, twindow)
             mesg = self.summary_mesg(twindow/3600, stns, refs, mesg)
+
         else:
             (_, mesg) = self.spotsearch(region, maxfreq, twindow)
 
