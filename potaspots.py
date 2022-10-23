@@ -216,9 +216,14 @@ class POTASpotter:
         return (count, mesg)
     
     def stats(self, region, now, twindow):
-        reg_q_all = f"select ref,callsign,count(callsign) from potaspots where region='{region}' and utc > {now - twindow} group by ref, callsign order by utc"
+        if region:
+            q_reg = f"region = '{region}' and"
+        else:
+            q_reg = ""
+            
+        reg_q_all = f"select ref,callsign,count(callsign) from potaspots where {q_reg} utc > {now - twindow} group by ref, callsign order by utc"
         
-        reg_q_tweet = f"select ref,callsign,count(callsign) from potaspots where region='{region}' and tweeted = 1 and utc > {now - twindow} group by ref, callsign"
+        reg_q_tweet = f"select ref,callsign,count(callsign) from potaspots where {q_reg} tweeted = 1 and utc > {now - twindow} group by ref, callsign"
         refmap= {}
 
         (twtall, spotall) = (0 , 0)
@@ -359,6 +364,10 @@ class POTASpotter:
                 lat = s['latitude']
                 lon = s['longitude']
                 hhmm= datetime.datetime.fromisoformat(s['spotTime']).strftime('%H:%M')
+
+                if not spotter:
+                    continue
+                
                 if (mode == comment):
                     comment = ''
 
@@ -371,7 +380,7 @@ class POTASpotter:
                 except ValueError:
                     rfreq = 0.0
 
-                if spotter and not (spotter in activator):
+                if not (spotter in activator):
                     q = f"select count(*) from potaspots where utc > {self.now - self.suppress_interval} and callsign = '{activator}' and ref = '{ref}' and freq = {rfreq} and mode = '{mode}' and tweeted = 1"
                     self.cur.execute(q)
                     (count,) = self.cur.fetchall()[0]
@@ -424,7 +433,7 @@ class POTASpotter:
 if __name__ == "__main__":
   spotter = POTASpotter(myid = myid,
                         interval = 70,
-                        suppress_interval= 600,
+                        suppress_interval= 1200,
                         storage_period = 31,
                         tweetat="21:00",
                         prefix='JA-*')
