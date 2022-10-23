@@ -371,7 +371,7 @@ class POTASpotter:
                 except ValueError:
                     rfreq = 0.0
 
-                if 'GT' in comment or 'RBN' in comment or (spotter and not (spotter in activator)):
+                if spotter and not (spotter in activator):
                     q = f"select count(*) from potaspots where utc > {self.now - self.suppress_interval} and callsign = '{activator}' and ref = '{ref}' and freq = {rfreq} and mode = '{mode}' and tweeted = 1"
                     self.cur.execute(q)
                     (count,) = self.cur.fetchall()[0]
