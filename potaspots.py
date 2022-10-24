@@ -373,10 +373,15 @@ class POTASpotter:
 
                 region = ref[0:ref.find('-')]                              
                 try:
-                    if 'FT' in mode:
-                        rfreq = round(float(freq)/10,0) * 10
+                    f = float(freq)
+                    if f > 30000.0:
+                        m = 10
                     else:
-                        rfreq = round(float(freq),0)
+                        m = 20
+                    if 'FT' in mode or 'JT' in mode:
+                        rfreq = round(f / m, 0) * m
+                    else:
+                        rfreq = round(f, 0)
                 except ValueError:
                     rfreq = 0.0
 
@@ -431,10 +436,10 @@ class POTASpotter:
             time.sleep(10)
         
 if __name__ == "__main__":
-  spotter = POTASpotter(myid = myid,
-                        interval = 70,
-                        suppress_interval= 1200,
-                        storage_period = 31,
-                        tweetat="21:00",
-                        prefix='JA-*')
-  spotter.run()
+    spotter = POTASpotter(myid = myid,
+                          interval = 70,
+                          suppress_interval= 900,
+                          storage_period = 31,
+                          tweetat="21:00",
+                          prefix='JA-*')
+    spotter.run()
