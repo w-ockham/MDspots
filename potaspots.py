@@ -242,15 +242,20 @@ class POTASpotter:
                 (_, total) = refmap[ref][call]
                 refmap[ref][call] = (count, total)
 
-        mesg = f"Tweet Rate Last {round(twindow/3600)}H = {round(twtall/spotall*100)}%({twtall}tweets/{spotall}spots)\n"
-        for ref in refmap.keys():
-            mesg += f"{ref}: "
-            for call in refmap[ref].keys():
-                (twt, total) = refmap[ref][call]
-                mesg += f"{call} {round(twt/total*100)}%({twt}/{total}) "
-            mesg += "\n"
+        if spotall != 0:
+            mesg = f"Tweet Rate Last {round(twindow/3600)}H = {round(twtall/spotall*100)}%({twtall}tweets/{spotall}spots)\n"
 
-        return mesg;
+            for ref in refmap.keys():
+                mesg += f"{ref}: "
+                for call in refmap[ref].keys():
+                    (twt, total) = refmap[ref][call]
+                    mesg += f"{call} {round(twt/total*100)}%({twt}/{total}) "
+                mesg += "\n"
+            mesg = mesg.rstrip()
+        else:
+            mesg = f"No spots in {region}"
+            
+        return mesg
         
     def interp(self, cmd):
         self.now = int(datetime.datetime.utcnow().strftime("%s"))
@@ -270,13 +275,13 @@ class POTASpotter:
             elif 'STAT' in cmd:
                 statmode = True
                 twindow = 24 * 3600
-            elif cmd.isalpha():
-                region = cmd
             elif cmd.isdigit():
                 if logmode or statmode:
                     twindow = int(cmd) * 3600
                 else:
                     twindow = int(cmd) * 60
+            elif cmd.isalnum():
+                region = cmd
             else:
                 break
 
@@ -442,4 +447,8 @@ if __name__ == "__main__":
                           storage_period = 31,
                           tweetat="21:00",
                           prefix='JA-*')
-    spotter.run()
+
+    if len(sys.argv) == 1:
+        spotter.run()
+    else:
+        print(spotter.interp(' '.join(sys.argv[1:])))
