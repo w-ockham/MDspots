@@ -342,6 +342,10 @@ class POTASpotter:
             mesg = tm
         self.tweet_as_reply(res, mesg.rstrip())
 
+    def is_selfspot(self, spotter, activator):
+        sp = re.sub('-\d+|/\d+|/P','',spotter.upper())
+        return sp in activator.upper()
+    
     def periodical(self):
         self.now = int(datetime.datetime.utcnow().strftime("%s"))
         
@@ -390,7 +394,7 @@ class POTASpotter:
                 except ValueError:
                     rfreq = 0.0
 
-                if not (spotter in activator):
+                if not self.is_selfspot(spotter, activator):
                     q = f"select count(*) from potaspots where utc > {self.now - self.suppress_interval} and callsign = '{activator}' and ref = '{ref}' and freq = {rfreq} and mode = '{mode}' and tweeted = 1"
                     self.cur.execute(q)
                     (count,) = self.cur.fetchall()[0]
