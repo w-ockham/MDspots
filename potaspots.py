@@ -85,23 +85,33 @@ class POTASpotter:
             s = f"{math.floor(f/1000):.0f}"
         return s
 
-    def summary_mesg(self, t, sc, rc, mesg):
+    def summary_mesg(self, call, t, sc, rc, mesg):
         pl = lambda x: 's' if x > 1 else ''
         t = int(t)
-        if sc > 0:
+        if call:
+            return f"Activation summary for the last {t} hour{pl(t)}: {call} activated {rc} park{pl(rc)}.\n" + mesg
+        elif sc > 0:
             return f"Activation summary for the last {t} hour{pl(t)}: {sc} station{pl(sc)} activated {rc} park{pl(rc)}.\n" + mesg
         else:
             return  f"Activation summary for the last {t} hour{pl(t)}: No activation."
 
-    def logsearch(self, target, locpfx, twindow):
+    def logsearch(self, region, locpfx, call, twindow):
         lastseen = self.now - twindow
         mesg = ''
         references = set()
         stations = set()
-        
-        q = f"select distinct callsign, ref from potaspots where utc > {lastseen}"
-        if target:
-            q += f" and region = '{target}'"
+
+        if region:
+            q_reg = f"region = '{region}' and"
+        else:
+            q_reg = ""
+
+        if call:
+            q_call = f"callsign like '{call}%' and"
+        else:
+            q_call = ""
+
+        q = f"select distinct callsign, ref from potaspots where {q_reg} {q_call} utc > {lastseen}"
 
         for i in self.cur.execute(q):
             (call, ref) = i
@@ -112,9 +122,7 @@ class POTASpotter:
             mloc = ''
             lastmode = None
             
-            q = f"select * from potaspots where callsign = '{call}' and ref = '{ref}' and utc > {lastseen}"
-            if target:
-                q += f" and region = '{target}'"
+            q = f"select * from potaspots where callsign = '{call}' and ref = '{ref}' and {q_reg} utc > {lastseen}"
 
             for j in self.cur2.execute(q):
                 (_, tm, _, freq, mode, region, _, park, comment, spotter, _) = j
@@ -186,19 +194,30 @@ class POTASpotter:
             
         return (len(stations), len(references), mesg)
     
-    def spotsearch(self, target, maxfreq, twindow):
+    def spotsearch(self, region, call, maxfreq, twindow):
         lastseen = self.now - twindow
         mesg = ''
         count = 0
 
-        if maxfreq:
-            q = f"select distinct callsign,ref  from potaspots where utc > {lastseen} and freq <= {maxfreq}"
+        if region:
+            q_reg = f"region = '{region}' and"
         else:
-            q = f"select distinct callsign, ref from potaspots where utc > {lastseen}"
+            q_reg = ""
 
-        if target:
-            q += f" and region = '{target}'"
+        if call:
+            q_call = f"callsign like '{call}%' and"
+        else:
+            q_call = ""
+
+
+        if maxfreq:
+            q_freq = f"freq <= {maxfreq} and"
+        else:
+            q_freq = ""
             
+            
+        q = f"select distinct callsign,ref  from potaspots where {q_reg} {q_call} {q_freq} utc > {lastseen}"
+        
         for s in self.cur.execute(q + ' order by utc desc'):
             (call, ref ) = s
             q = f"select * from potaspots where callsign ='{call}' and ref='{ref}' and utc > {lastseen} order by utc desc"
@@ -215,15 +234,25 @@ class POTASpotter:
 
         return (count, mesg)
     
-    def stats(self, region, now, twindow):
+    def stats(self, region, call, mode, now, twindow):
         if region:
             q_reg = f"region = '{region}' and"
         else:
             q_reg = ""
+
+        if call:
+            q_call = f"callsign like '{call}%' and"
+        else:
+            q_call = ""
+
+        if mode:
+            q_mod = f"mode = '{mode}' and"
+        else:
+            q_mod = ""
             
-        reg_q_all = f"select ref,callsign,count(callsign) from potaspots where {q_reg} utc > {now - twindow} group by ref, callsign order by utc"
+        reg_q_all = f"select ref,callsign,count(callsign) from potaspots where {q_reg} {q_call} {q_mod} utc > {now - twindow} group by ref, callsign order by utc"
         
-        reg_q_tweet = f"select ref,callsign,count(callsign) from potaspots where {q_reg} tweeted = 1 and utc > {now - twindow} group by ref, callsign"
+        reg_q_tweet = f"select ref,callsign,count(callsign) from potaspots where {q_reg} {q_call} {q_mod} tweeted = 1 and utc > {now - twindow} group by ref, callsign"
         refmap= {}
 
         (twtall, spotall) = (0 , 0)
@@ -243,7 +272,12 @@ class POTASpotter:
                 refmap[ref][call] = (count, total)
 
         if spotall != 0:
-            mesg = f"Tweet Rate Last {round(twindow/3600)}H = {round(twtall/spotall*100)}%({twtall}tweets/{spotall}spots)\n"
+            if mode:
+                mstr = f"({mode})"
+            else:
+                mstr = ""
+                
+            mesg = f"Tweet Rate Last {round(twindow/3600)}hrs {mstr} = {round(twtall/spotall*100)}%({twtall}tweets/{spotall}spots)\n"
 
             for ref in refmap.keys():
                 mesg += f"{ref}: "
@@ -260,7 +294,7 @@ class POTASpotter:
     def interp(self, cmd):
         self.now = int(datetime.datetime.utcnow().strftime("%s"))
         command = cmd.upper().split()
-        (region, locpfx, maxfreq, logmode, statmode, twindow) = ('JA', None, None, False, False, 3600)
+        (region, locpfx, call, mode, maxfreq, logmode, statmode, twindow) = ('JA', None, None, None, None, False, False, 3600)
         for cmd in command:
             if 'JA' in cmd:
                 region = 'JA'
@@ -275,25 +309,30 @@ class POTASpotter:
             elif 'STAT' in cmd:
                 statmode = True
                 twindow = 24 * 3600
+            elif cmd in ['FT4','FT8','CW','SSB','FM','AM','PSK','PSK31']:
+                mode = cmd
             elif cmd.isdigit():
                 if logmode or statmode:
                     twindow = int(cmd) * 3600
                 else:
                     twindow = int(cmd) * 60
             elif cmd.isalnum():
-                region = cmd
+                if len(cmd) > 3:
+                    call = cmd
+                else:
+                    region = cmd
             else:
                 break
 
         if statmode:
-            mesg = self.stats(region, self.now, twindow)
+            mesg = self.stats(region, call, mode, self.now, twindow)
 
         elif logmode:
-            (stns, refs, mesg) = self.logsearch(region, locpfx, twindow)
-            mesg = self.summary_mesg(twindow/3600, stns, refs, mesg)
+            (stns, refs, mesg) = self.logsearch(region, locpfx, call, twindow)
+            mesg = self.summary_mesg(call, twindow/3600, stns, refs, mesg)
 
         else:
-            (_, mesg) = self.spotsearch(region, maxfreq, twindow)
+            (_, mesg) = self.spotsearch(region, call, maxfreq, twindow)
 
         return mesg
 
@@ -328,8 +367,8 @@ class POTASpotter:
                     return
             
     def summary(self):
-        (stns, refs, mesg) = self.logsearch('JA', 'JP', self.logwindow * 3600)
-        mesg = self.summary_mesg(self.logwindow, stns, refs, mesg)
+        (stns, refs, mesg) = self.logsearch('JA', 'JP', None, self.logwindow * 3600)
+        mesg = self.summary_mesg(None, self.logwindow, stns, refs, mesg)
         res = None
         tm = ''
         if stns > 0:
