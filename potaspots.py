@@ -11,28 +11,44 @@ import schedule
 import sys
 import sqlite3
 import time
-from twython import Twython, TwythonError
 
-consumer = ''
-consumer_sec = ''
-access = ''
-access_sec = ''
-myid =  ''
+from twython import Twython, TwythonError
+from mastodon import Mastodon
 
 class POTASpotter:
-    def __init__(self, myid, interval=70, suppress_interval=600, storage_period = 7, tweetat="21:00", logwindow=21, prefix='JA-*'):
-        self.myid = myid;
-        self.interval = interval
-        self.suppress_interval = suppress_interval
-        self.storage_period = storage_period
-        self.tweetat = tweetat
-        self.logwindow = logwindow
-        self.prefix = prefix
+    def __init__(self, **args):
+
+        consumer = args.get('consumer','')
+        consumer_sec = args.get('consumer_sec','')
+        access = args.get('access','')
+        access_sec = args.get('access_sec','')
+        self.myid = args.get('myid','')
+        
+        md_access_token = args.get('md_access_token', None)
+        md_api_base_url = args.get('md_api_base_url', None)
+
+        self.interval = args.get('interval',70)
+        self.suppress_interval = args.get('suppress_interval',900)
+        self.storage_period = args.get('storage_period', 31)
+        self.tweetat = args.get('tweetat', "21:00")
+        self.logwindow = args.get('logwindow', 21)
+        self.prefix = args.get('prefix', 'JA-*')
+        
         self.potaapi = 'https://api.pota.app/spot/activator/'
         self.logdir = '/var/log/potaspots/'
         self.homedir = '/home/ubuntu/sotaapp/backend/'
         self.logfile = 'potaspot.log'
+
         self.api = Twython(consumer, consumer_sec, access, access_sec)
+
+        if md_access_token:
+            self.mastodon = Mastodon(
+                access_token = md_access_token,
+                api_base_url = md_api_base_url
+                )
+        else:
+            self.mastodon = None
+            
         self.db = sqlite3.connect(self.homedir + 'potaspot.db')
         self.cur = self.db.cursor()
         self.cur2 = self.db.cursor()
@@ -66,17 +82,45 @@ class POTASpotter:
             except TwythonError as e:
                 self.log(f'Error: {e}')
                 res = None
+
+            if self.mastodon:
+                try:
+                    res_md = self.mastodon.status_post(mesg)
+                    self.log(f'SpottedMD: {mesg}')
+                except Exception as e:
+                    self.log(f'ErrorMD: {e}')
+                    res_md = None
+            else:
+                res_md = Noneｗ
         else:
             try:
-                res = self.api.update_status(status=mesg, in_reply_to_status_id=repl_id, auto_populate_reply_metadata=True)
+                res = self.api.update_status(status=mesg, in_reply_to_status_id=repl_id['tw'], auto_populate_reply_metadata=True)
                 self.log(f'Spotted: {mesg}')
             except TwythonError as e:
                 self.log(f'Error: {e}')
                 res = None
+
+            if self.mastodon:
+                try:
+                    res_md = self.mastodon.status_post(mesg, in_reply_to_id=repl_id['md'])
+                    self.log(f'SpottedMD: {mesg}')
+                except Exception as e:
+                    self.log(f'ErrorMD: {e}')
+                    res_md = None
+            else:
+                res_md = None
+
         if res:
-            return res['id']
+            tid = res['id']
         else:
-            return None
+            tid = None
+
+        if res_md:
+            mid = res_md['id']
+        else:
+            mid = None
+            
+        return {'tw': tid, 'md': mid}
 
     def freqstr(self, f):
         if f < 4000:
@@ -452,6 +496,13 @@ class POTASpotter:
                         self.log(f'Spotted id{sid}: {mesg}')
                     except TwythonError as e:
                         self.log(f'Warning:{e} status={mesg}')
+                        
+                    if self.mastodon:
+                        try:
+                            res_md = self.mastodon.status_post(mesg)
+                            self.log(f'SpottedMD: {mesg}')
+                        except Exception as e:
+                            self.log(f'ErrorMD: {e}')
 
                 q = 'insert into potaspots(utc, time, callsign, freq, mode, region, ref, park, comment, spotter, tweeted) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 self.cur.execute(q, (self.now, hhmm, activator, rfreq, mode, region, ref, park, comment, spotter, 0 if skip_this else 1))
@@ -484,7 +535,23 @@ class POTASpotter:
             time.sleep(10)
         
 if __name__ == "__main__":
+
+    consumer = ''
+    consumer_sec = ''
+    access = ''
+    access_sec = ''
+    myid =  ''
+
+    mastodon_access_token = ''
+    mastodon_api_base_url = ''
+    
     spotter = POTASpotter(myid = myid,
+                          consumer = consumer,
+                          consumer_sec = consumer_sec,
+                          access = access,
+                          access_sec = access_sec,
+                          md_access_token = mastodon_access_token,
+                          md_api_base_url = mastodon_api_base_url,
                           interval = 70,
                           suppress_interval= 900,
                           storage_period = 31,
@@ -495,3 +562,4 @@ if __name__ == "__main__":
         spotter.run()
     else:
         print(spotter.interp(' '.join(sys.argv[1:])))
+            
