@@ -23,7 +23,7 @@ class POTASpotter:
         access = args.get('access','')
         access_sec = args.get('access_sec','')
         self.myid = args.get('myid','')
-        
+
         md_access_token = args.get('md_access_token', None)
         md_api_base_url = args.get('md_api_base_url', None)
 
@@ -82,16 +82,6 @@ class POTASpotter:
             except TwythonError as e:
                 self.log(f'Error: {e}')
                 res = None
-
-            if self.mastodon:
-                try:
-                    res_md = self.mastodon.status_post(mesg)
-                    self.log(f'SpottedMD: {mesg}')
-                except Exception as e:
-                    self.log(f'ErrorMD: {e}')
-                    res_md = None
-            else:
-                res_md = Noneｗ
         else:
             try:
                 res = self.api.update_status(status=mesg, in_reply_to_status_id=repl_id['tw'], auto_populate_reply_metadata=True)
@@ -100,28 +90,26 @@ class POTASpotter:
                 self.log(f'Error: {e}')
                 res = None
 
-            if self.mastodon:
-                try:
-                    res_md = self.mastodon.status_post(mesg, in_reply_to_id=repl_id['md'])
-                    self.log(f'SpottedMD: {mesg}')
-                except Exception as e:
-                    self.log(f'ErrorMD: {e}')
-                    res_md = None
-            else:
+        return res
+
+    def toot_as_reply(self, repl_id, mesg):
+        if not repl_id:
+            try:
+                res_md = self.mastodon.status_post(mesg)
+                self.log(f'SpottedMD: {mesg}')
+            except Exception as e:
+                self.log(f'ErrorMD: {e}')
                 res_md = None
-
-        if res:
-            tid = res['id']
         else:
-            tid = None
-
-        if res_md:
-            mid = res_md['id']
-        else:
-            mid = None
+            try:
+                res_md = self.mastodon.status_post(mesg, in_reply_to_id=repl_id['md'])
+                self.log(f'SpottedMD: {mesg}')
+            except Exception as e:
+                self.log(f'ErrorMD: {e}')
+                res_md = None
             
-        return {'tw': tid, 'md': mid}
-
+        return res_md
+        
     def freqstr(self, f):
         if f < 4000:
             s = f"{f/1000:.1f}"
@@ -413,6 +401,7 @@ class POTASpotter:
     def summary(self):
         (stns, refs, mesg) = self.logsearch('JA', 'JP', None, self.logwindow * 3600)
         mesg = self.summary_mesg(None, self.logwindow, stns, refs, mesg)
+        mesg_md = mesg
         res = None
         tm = ''
         if stns > 0:
@@ -424,6 +413,20 @@ class POTASpotter:
                     tm += m + '\n'
             mesg = tm
         self.tweet_as_reply(res, mesg.rstrip())
+
+        if self.mastodon:
+            mesg = mesg_md
+            res = None
+            tm = ''
+            if stns > 0:
+                for m in mesg.splitlines():
+                    if len(tm + m) > 490:
+                        res = self.toot_as_reply(res, tm.rstrip())
+                        tm = m + '\n'
+                    else:
+                        tm += m + '\n'
+                mesg = tm
+            self.toot_as_reply(res, mesg.rstrip())
 
     def is_selfspot(self, spotter, activator):
         sp = re.sub('-\d+|/\d+|/P','',spotter.upper())
@@ -562,4 +565,3 @@ if __name__ == "__main__":
         spotter.run()
     else:
         print(spotter.interp(' '.join(sys.argv[1:])))
-            
