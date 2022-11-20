@@ -84,7 +84,7 @@ class POTASpotter:
                 res = None
         else:
             try:
-                res = self.api.update_status(status=mesg, in_reply_to_status_id=repl_id['tw'], auto_populate_reply_metadata=True)
+                res = self.api.update_status(status=mesg, in_reply_to_status_id=repl_id['id'], auto_populate_reply_metadata=True)
                 self.log(f'Spotted: {mesg}')
             except TwythonError as e:
                 self.log(f'Error: {e}')
@@ -102,7 +102,7 @@ class POTASpotter:
                 res_md = None
         else:
             try:
-                res_md = self.mastodon.status_post(mesg, in_reply_to_id=repl_id['md'])
+                res_md = self.mastodon.status_post(mesg, in_reply_to_id=repl_id['id'])
                 self.log(f'SpottedMD: {mesg}')
             except Exception as e:
                 self.log(f'ErrorMD: {e}')
