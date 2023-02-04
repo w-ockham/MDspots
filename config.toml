@@ -1,0 +1,39 @@
+[config]   
+interval = 70
+homedir = '/home/your/home'
+logdir = '/var/log/yourlog/'
+logname = 'mdspots.log'
+alerts = "08:00"
+summary = "21:00"
+
+[config.pota]
+summary = 21
+suppress_interval = 900
+storage_period =  7
+filter =  'JA*'
+
+[config.sota]
+summary = 21
+suppress_interval = 60
+storage_period = 7
+filter =  'JA*'
+
+[accesskeys.pota]
+#Twitter Access Key for POTA Spot
+consumer = ''
+consumer_sec = ''
+access = ''
+access_sec = ''
+#Mastodon Access Token for POTA Spot
+mastodon_access_token = '/home/your/home/potaauth.txt'
+mastodon_api_base_url = 'https://mstdn.jp'
+
+[accesskeys.sota]
+#Twitter Access Key for SOTA Spot
+consumer = ''
+consumer_sec = ''
+access = ''
+access_sec = ''
+#Mastodon Access Token for SOTA Spot
+mastodon_access_token = '/home/your/home/sotaauth.txt'
+mastodon_api_base_url = 'https://mstdn.jp'

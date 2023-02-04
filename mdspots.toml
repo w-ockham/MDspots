@@ -1,0 +1,51 @@
+programs = ['sota', 'pota']
+
+[endpoints.pota]
+client = {}
+spots = 'https://api.pota.app/spot/activator/'
+alerts = 'https://api.pota.app/activation/'
+
+[endpoints.sota]
+client = { client = 'sotawatch', user = 'anon'}
+spots =  'https://api2.sota.org.uk/api/spots/20?'
+alerts=  'https://api2.sota.org.uk/api/alerts?'
+
+[spot_translates.pota]
+id = 'spotId'
+ref =  ['reference']
+act = 'activator'
+time = 'spotTime'
+freq = 'frequency'
+mode = 'mode'
+name = 'name'
+loc = 'locationDesc'
+spotter = 'spotter'
+comments = 'comments'
+
+[spot_translates.sota]
+id = 'id'
+ref = ['associationCode', 'summitCode']
+act = 'activatorCallsign'
+time = 'timeStamp'
+freq = 'frequency'
+mode = 'mode'
+name = 'summitDetails'
+loc = 'associationCode'
+spotter = 'callsign'
+comments = 'comments'
+
+[alert_translates.pota]
+time = ['startDate', 'startTime']
+act = 'activator'
+ref =  ['reference']
+name = 'name'
+freq = 'frequencies'
+comments = 'comments'
+
+[alert_translates.sota]
+time = ['dateActivated']
+act =  'activatingCallsign'
+ref =  ['associationCode', 'summitCode']
+name = 'summitDetails'
+freq = 'frequency'
+comments = 'comments'
