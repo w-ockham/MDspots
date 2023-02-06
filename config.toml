@@ -1,11 +1,12 @@
 [config]   
 interval = 70
-homedir = '/home/your/home'
-logdir = '/var/log/yourlog/'
-logname = 'mdspots.log'
-localtz = 'Asia/Tokyo'
+homedir = '/home/ubuntu/sotaapp/backend/'
+logdir = '/var/log/potaspots/'
+logname = 'potaspots.log'
+localtz = "Asia/Tokyo"
 alerts = "08:00"
 summary = "21:00"
+nostr_relay_servers = [ "wss://nostr.mom", "wss://relay.damus.io", "wss://nostr-pub.wellorder.net", "wss://nos.lol"]
 
 [config.pota]
 summary = 21
@@ -19,22 +20,22 @@ suppress_interval = 60
 storage_period = 7
 filter =  'JA*'
 
-[accesskeys.pota]
-#Twitter Access Key for POTA Spot
+[accesskeys.pota] 
 consumer = ''
 consumer_sec = ''
 access = ''
 access_sec = ''
-#Mastodon Access Token for POTA Spot
-mastodon_access_token = '/home/your/home/potaauth.txt'
-mastodon_api_base_url = 'https://mstdn.jp'
+mastodon_access_token = ''
+mastodon_api_base_url = ''
+nostr_private_key = ''
 
 [accesskeys.sota]
-#Twitter Access Key for SOTA Spot
 consumer = ''
 consumer_sec = ''
 access = ''
 access_sec = ''
-#Mastodon Access Token for SOTA Spot
-mastodon_access_token = '/home/your/home/sotaauth.txt'
-mastodon_api_base_url = 'https://mstdn.jp'
+mastodon_access_token = ''
+mastodon_api_base_url = ''
+nostr_private_key = ''
+
+

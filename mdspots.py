@@ -8,6 +8,7 @@ import os
 import pytz
 import re
 import schedule
+import ssl
 import sys
 import sqlite3
 import time
@@ -15,6 +16,10 @@ import toml
 
 from twython import Twython, TwythonError
 from mastodon import Mastodon
+from nostr.event import Event
+from nostr.relay_manager import RelayManager
+from nostr.message_type import ClientMessageType
+from nostr.key import PrivateKey
 
 
 class MDSpotter:
@@ -32,6 +37,8 @@ class MDSpotter:
         self.lastid = {}
         self.twapi = {}
         self.mdapi = {}
+        self.ntpriv_key = {}
+        self.ntrelay = None
 
         for p in self.programs:
             if self.accesskeys[p]['consumer']:
@@ -49,7 +56,21 @@ class MDSpotter:
             else:
                 self.mdapi[p] = None
 
+            if self.accesskeys[p]['nostr_private_key']:
+                self.ntpriv_key[p] = PrivateKey.from_nsec(
+                    self.accesskeys[p]['nostr_private_key'])
+                if not self.ntrelay:
+                    self.ntrelay = RelayManager()
+                    for r in self.config['nostr_relay_servers']:
+                        self.ntrelay.add_relay(r)
+            else:
+                self.ntpriv_key[p] = None
+
             self.lastid[p] = 0
+
+        if self.ntrelay:
+            self.ntrelay.open_connections({"cert_reqs": ssl.CERT_NONE})
+            time.sleep(1.25)
 
         self.db = sqlite3.connect(self.config['homedir'] + 'mdspots.db')
         self.cur = self.db.cursor()
@@ -64,7 +85,7 @@ class MDSpotter:
         self.db.commit()
 
         self.loadLastId()
- 
+
     def saveLastId(self):
         with open(self.config['homedir'] + 'lastid.pkl', mode='wb') as f:
             pickle.dump(self.lastid, f)
@@ -130,6 +151,25 @@ class MDSpotter:
                 res_md = None
 
         return res_md
+
+    def post_nostr_event(self, prog, mesg):
+        if not self.ntpriv_key[prog]:
+            self.log(f"Nostr({prog})={mesg}")
+            return
+
+        if self.ntrelay:
+            event = Event(mesg)
+            self.ntpriv_key[prog].sign_event(event)
+            self.ntrelay.publish_event(event)
+            time.sleep(1)
+
+        return
+
+    def close_connection(self):
+        if self.ntrelay:
+            self.ntrelay.close_connections()
+            self.log(
+                f"Closed NOSTR Relay Servers:{self.config['nostr_relay_servers']}")
 
     def getJSON(self, prog, ty):
         if self.endpoints[prog][ty]:
@@ -371,7 +411,7 @@ class MDSpotter:
         prog = self.programs[0]
         (region, locpfx, call, mode, maxfreq, logmode, statmode, twindow) = (
             'JA', None, None, None, None, False, False, 3600)
-        
+
         for cmd in command:
             if cmd == 'JA':
                 region = 'JA'
@@ -383,12 +423,12 @@ class MDSpotter:
             elif cmd == 'LOG':
                 logmode = True
                 twindow = 12 * 3600
-            elif  cmd == 'STAT':
+            elif cmd == 'STAT':
                 statmode = True
                 twindow = 24 * 3600
             elif cmd in ['FT4', 'FT8', 'CW', 'SSB', 'FM', 'AM', 'PSK', 'PSK31']:
                 mode = cmd
-            elif cmd in ['SOTA','POTA']:
+            elif cmd in ['SOTA', 'POTA']:
                 prog = cmd.lower()
             elif cmd.isdigit():
                 if logmode or statmode:
@@ -475,6 +515,17 @@ class MDSpotter:
                     tm += m + '\n'
             mesg = tm
         self.toot_as_reply(prog, res, mesg.rstrip())
+
+        tm = ''
+        if stns > 0:
+            for m in mesg_md.splitlines():
+                if len(tm + m) > 490:
+                    self.post_nostr_event(prog, tm.rstrip())
+                    tm = m + '\n'
+                else:
+                    tm += m + '\n'
+            mesg = tm
+        self.post_nostr_event(prog, tm.rstrip())
 
     def is_selfspot(self, spotter, activator):
         sp = re.sub('-\d+|/\d+|/P', '', spotter.upper())
@@ -603,6 +654,7 @@ class MDSpotter:
 
                     self.tweet_as_reply(prog, None, mesg)
                     self.toot_as_reply(prog, None, mesg)
+                    self.post_nostr_event(prog, mesg)
 
                 q = 'insert into mdspots(utc, time, prog, callsign, ref, name, freq, mode, loc, region, comment, spotter, tweeted) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 self.cur.execute(q, (self.now, hhmm, prog, activator, ref, name,
@@ -636,6 +688,7 @@ class MDSpotter:
             for a in self.alerts(p):
                 rest = self.tweet_as_reply(p, rest, a)
                 resm = self.toot_as_reply(p, resm, a)
+                self.post_nostr_event(a)
 
     def daily_summary(self):
         for p in self.programs:
@@ -643,7 +696,7 @@ class MDSpotter:
 
     def run(self):
         self.log(f"Start MDSpot Server {__file__}")
-        
+
         schedule.every(self.config['interval']).seconds.do(self.periodical)
         schedule.every().day.at(self.config['alerts']).do(self.daily_alerts)
         schedule.every().day.at(self.config['summary']).do(self.daily_summary)
@@ -651,6 +704,7 @@ class MDSpotter:
         while True:
             schedule.run_pending()
             time.sleep(10)
+
 
 if __name__ == "__main__":
     with open(os.path.dirname(__file__) + '/mdspots.toml') as f:
@@ -694,4 +748,6 @@ if __name__ == "__main__":
                 to_file=tofile
             )
         else:
+            spotter.post_nostr_event("pota", ' '.join(spotter.alerts("pota")))
             print(spotter.interp(' '.join(sys.argv[1:])))
+            spotter.close_connection()
