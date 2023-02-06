@@ -3,6 +3,7 @@ interval = 70
 homedir = '/home/your/home'
 logdir = '/var/log/yourlog/'
 logname = 'mdspots.log'
+localtz = 'Asia/Tokyo'
 alerts = "08:00"
 summary = "21:00"
 

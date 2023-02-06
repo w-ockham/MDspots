@@ -5,6 +5,7 @@ import urllib.request
 import json
 import math
 import os
+import pytz
 import re
 import schedule
 import sys
@@ -25,6 +26,8 @@ class MDSpotter:
         self.translates = args.get('translates', None)
         self.config = args.get('config', None)
         self.endpoints = args.get('endpoints', None)
+
+        self.localtz = pytz.timezone(self.config['localtz'])
 
         self.lastid = {}
         self.twapi = {}
@@ -508,7 +511,7 @@ class MDSpotter:
                         res.append(mesg)
 
         acount = len(res)
-        today = datetime.utcnow().strftime("%A %d %B %Y")
+        today = datetime.now(self.localtz).strftime("%A %d %B %Y")
         if acount == 0:
             tm = f'No Activations are scheduled on {today}'
         elif acount == 1:
@@ -655,7 +658,6 @@ if __name__ == "__main__":
 
     with open(os.path.dirname(__file__) + '/config.toml') as f:
         configobj = toml.load(f)
-        # print(configobj)
 
     translates = {
         'alerts': systemobj['alert_translates'], 'spots': systemobj['spot_translates']}
