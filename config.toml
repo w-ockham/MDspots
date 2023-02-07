@@ -1,7 +1,7 @@
 [config]   
 interval = 70
-homedir = '/home/ubuntu/sotaapp/backend/'
-logdir = '/var/log/potaspots/'
+homedir = '/home/your/home'
+logdir = '/var/log/yourlog/'
 logname = 'potaspots.log'
 localtz = "Asia/Tokyo"
 alerts = "08:00"
@@ -26,7 +26,7 @@ consumer_sec = ''
 access = ''
 access_sec = ''
 mastodon_access_token = ''
-mastodon_api_base_url = ''
+mastodon_api_base_url = 'https://mstdn.jp'
 nostr_private_key = ''
 
 [accesskeys.sota]
@@ -35,7 +35,7 @@ consumer_sec = ''
 access = ''
 access_sec = ''
 mastodon_access_token = ''
-mastodon_api_base_url = ''
+mastodon_api_base_url = 'https://mstdn.jp'
 nostr_private_key = ''
 
 

@@ -86,6 +86,13 @@ class MDSpotter:
 
         self.loadLastId()
 
+    def __del__(self):
+        self.db.commit()
+        self.db.close()
+
+        if self.ntrelay:
+            self.ntrelay.close_connections()
+
     def saveLastId(self):
         with open(self.config['homedir'] + 'lastid.pkl', mode='wb') as f:
             pickle.dump(self.lastid, f)
@@ -688,7 +695,7 @@ class MDSpotter:
             for a in self.alerts(p):
                 rest = self.tweet_as_reply(p, rest, a)
                 resm = self.toot_as_reply(p, resm, a)
-                self.post_nostr_event(a)
+                self.post_nostr_event(p, a)
 
     def daily_summary(self):
         for p in self.programs:
@@ -748,6 +755,5 @@ if __name__ == "__main__":
                 to_file=tofile
             )
         else:
-            spotter.post_nostr_event("pota", ' '.join(spotter.alerts("pota")))
             print(spotter.interp(' '.join(sys.argv[1:])))
-            spotter.close_connection()
+            del spotter
