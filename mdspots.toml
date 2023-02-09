@@ -10,6 +10,11 @@ client = { client = 'sotawatch', user = 'anon'}
 spots =  'https://api2.sota.org.uk/api/spots/20?'
 alerts=  'https://api2.sota.org.uk/api/alerts?'
 
+[endpoints.sotalive]
+client = {}
+getref =  'https://www.sotalive.net/api/sota-jaff-pota?'
+
+
 [spot_translates.pota]
 id = 'spotId'
 ref =  ['reference']

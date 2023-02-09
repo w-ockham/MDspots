@@ -7,6 +7,7 @@ import math
 import os
 import pytz
 import re
+import requests
 import schedule
 import ssl
 import sys
@@ -178,10 +179,15 @@ class MDSpotter:
             self.log(
                 f"Closed NOSTR Relay Servers:{self.config['nostr_relay_servers']}")
 
-    def getJSON(self, prog, ty):
+    def getJSON(self, prog, ty, param=None):
         if self.endpoints[prog][ty]:
             try:
-                param = urllib.parse.urlencode(self.endpoints[prog]['client'])
+                if not param:
+                    param = urllib.parse.urlencode(
+                        self.endpoints[prog]['client'])
+                else:
+                    param = urllib.parse.urlencode({'refid': param})
+
                 readObj = urllib.request.urlopen(
                     self.endpoints[prog][ty] + param)
                 res = readObj.read()
@@ -189,6 +195,15 @@ class MDSpotter:
             except Exception as e:
                 self.log(f'Error:{e} {self.endpoints[prog][ty]}')
                 raise e
+
+    def refNamequery(self, refid):
+        res = self.getJSON('sotalive', 'getref', refid)
+        if res['counts'] == 0:
+            return (refid, refid)
+        else:
+            name = res['reference'][0]['name']
+            name_k = re.sub(r'\(.+\)|（.+）', '', res['reference'][0]['name_k'])
+            return (name, name_k)
 
     def freqstr(self, f):
         if f < 4000:
@@ -526,7 +541,7 @@ class MDSpotter:
         tm = ''
         if stns > 0:
             for m in mesg_md.splitlines():
-                if len(tm + m) > 490:
+                if len(tm + m) > 2048:
                     self.post_nostr_event(prog, tm.rstrip())
                     tm = m + '\n'
                 else:
@@ -655,7 +670,8 @@ class MDSpotter:
                 m = re.match(self.config[prog]['filter'], ref)
                 if not skip_this and m:
                     if prog == 'pota':
-                        mesg = f'{hhmm} {activator} on {ref}({loc} {name}) {freq} {mode} {comment}[{spotter}]'
+                        (_, name_k) = self.refNamequery(ref)
+                        mesg = f'{hhmm} {activator} on {ref}({name_k} {name} {loc}) {freq} {mode} {comment}[{spotter}]'
                     else:
                         mesg = f'{hhmm} {activator} on {ref}({name}) {freq} {mode} {comment}[{spotter}]'
 
