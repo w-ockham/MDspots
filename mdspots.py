@@ -63,15 +63,12 @@ class MDSpotter:
                 if not self.ntrelay:
                     self.ntrelay = RelayManager()
                     for r in self.config['nostr_relay_servers']:
-                        self.ntrelay.add_relay(r)
+                        self.ntrelay.add_relay(
+                            r, ssl_options={"cert_reqs": ssl.CERT_NONE})
             else:
                 self.ntpriv_key[p] = None
 
             self.lastid[p] = 0
-
-        if self.ntrelay:
-            self.ntrelay.open_connections({"cert_reqs": ssl.CERT_NONE})
-            time.sleep(1.25)
 
         self.db = sqlite3.connect(self.config['homedir'] + 'mdspots.db')
         self.cur = self.db.cursor()
@@ -92,7 +89,7 @@ class MDSpotter:
         self.db.close()
 
         if self.ntrelay:
-            self.ntrelay.close_connections()
+            self.ntrelay.close_all_relay_connections()
 
     def saveLastId(self):
         with open(self.config['homedir'] + 'lastid.pkl', mode='wb') as f:
@@ -160,18 +157,24 @@ class MDSpotter:
 
         return res_md
 
-    def post_nostr_event(self, prog, mesg):
+    def post_nostr_event(self, prog, repl_id, mesg):
         if not self.ntpriv_key[prog]:
             self.log(f"Nostr({prog})={mesg}")
-            return
+            return None
+
+        res_nostr = None
 
         if self.ntrelay:
             event = Event(mesg)
+            if repl_id:
+                event.add_event_ref(repl_id)
+
             self.ntpriv_key[prog].sign_event(event)
+            res_nostr = event.id
             self.ntrelay.publish_event(event)
             time.sleep(1)
 
-        return
+        return res_nostr
 
     def close_connection(self):
         if self.ntrelay:
@@ -538,16 +541,17 @@ class MDSpotter:
             mesg = tm
         self.toot_as_reply(prog, res, mesg.rstrip())
 
+        res = None
         tm = ''
         if stns > 0:
             for m in mesg_md.splitlines():
                 if len(tm + m) > 2048:
-                    self.post_nostr_event(prog, tm.rstrip())
+                    res = self.post_nostr_event(prog, res, tm.rstrip())
                     tm = m + '\n'
                 else:
                     tm += m + '\n'
             mesg = tm
-        self.post_nostr_event(prog, tm.rstrip())
+        self.post_nostr_event(prog, res, tm.rstrip())
 
     def is_selfspot(self, spotter, activator):
         sp = re.sub('-\d+|/\d+|/P', '', spotter.upper())
@@ -671,13 +675,13 @@ class MDSpotter:
                 if not skip_this and m:
                     if prog == 'pota':
                         (_, name_k) = self.refNamequery(ref)
-                        mesg = f'{hhmm} {activator} on {ref}({name_k} {name} {loc}) {freq} {mode} {comment}[{spotter}]'
+                        mesg = f'{hhmm} {activator} on {ref}({name_k} {name}, {loc}) {freq} {mode} {comment}[{spotter}]'
                     else:
                         mesg = f'{hhmm} {activator} on {ref}({name}) {freq} {mode} {comment}[{spotter}]'
 
                     self.tweet_as_reply(prog, None, mesg)
                     self.toot_as_reply(prog, None, mesg)
-                    self.post_nostr_event(prog, mesg)
+                    self.post_nostr_event(prog, None, mesg)
 
                 q = 'insert into mdspots(utc, time, prog, callsign, ref, name, freq, mode, loc, region, comment, spotter, tweeted) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 self.cur.execute(q, (self.now, hhmm, prog, activator, ref, name,
@@ -708,10 +712,11 @@ class MDSpotter:
         for p in self.programs:
             rest = None
             resm = None
+            resn = None
             for a in self.alerts(p):
                 rest = self.tweet_as_reply(p, rest, a)
                 resm = self.toot_as_reply(p, resm, a)
-                self.post_nostr_event(p, a)
+                resn = self.post_nostr_event(p, resn, a)
 
     def daily_summary(self):
         for p in self.programs:
