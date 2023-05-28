@@ -15,7 +15,7 @@ import sqlite3
 import time
 import toml
 
-from twython import Twython, TwythonError
+import tweepy
 from mastodon import Mastodon
 from nostr.event import Event
 from nostr.relay_manager import RelayManager
@@ -42,10 +42,14 @@ class MDSpotter:
         self.ntrelay = None
 
         for p in self.programs:
-            if self.accesskeys[p]['consumer']:
+            if self.accesskeys[p]['bearer']:
                 k = self.accesskeys[p]
-                self.twapi[p] = Twython(
-                    k['consumer'], k['consumer_sec'], k['access'], k['access_sec'])
+                self.twapi[p] = tweepy.Client(
+                    bearer_token=k['bearer'],
+                    consumer_key=k['consumer'],
+                    consumer_secret=k['consumer_sec'],
+                    access_token=k['access'],
+                    access_token_secret=k['access_sec'])
             else:
                 self.twapi[p] = None
 
@@ -75,13 +79,17 @@ class MDSpotter:
         self.cur2 = self.db.cursor()
         self.now = int(datetime.utcnow().strftime("%s"))
 
-        q = 'create table if not exists mdspots(utc int, time text, prog text, callsign text, ' \
-            'ref txt, name text, freq real, mode text, loc text, region text, comment text, spotter text, tweeted int)'
+        q = 'create table if not exists mdspots2(utc int, time text, prog text, callsign text, ' \
+            'ref txt, name text, freq real, rawfreq text, mode text, loc text, region text, comment text, spotter text, tweeted int)'
         self.cur.execute(q)
-        q = 'create index if not exists md_index on mdspots(utc, prog, ref, callsign, region)'
+        q = 'create index if not exists md_reg_index on mdspots2(utc, prog, region)'
         self.cur.execute(q)
-        self.db.commit()
+        q = 'create index if not exists md_ref_index on mdspots2(utc, ref)'
+        self.cur.execute(q)
+        q = 'create index if not exists md_call_index on mdspots2(utc, callsign)'
+        self.cur.execute(q)
 
+        self.db.commit()
         self.loadLastId()
 
     def __del__(self):
@@ -112,26 +120,26 @@ class MDSpotter:
     def tweet_as_reply(self, prog, repl_id, mesg):
 
         if not self.twapi[prog]:
-            self.log(f"Tweet={mesg}")
+            self.log(f"Tweet {prog} ={mesg}")
             return None
 
         if not repl_id:
             try:
-                res = self.twapi[prog].update_status(status=mesg)
+                res = self.twapi[prog].create_tweet(text=mesg)
                 self.log(f'Spotted: {mesg}')
-            except TwythonError as e:
-                self.log(f'Error: {e}')
-                res = None
+            except Exception as e:
+                self.log(f'Error: {prog} {mesg} : {e}')
+                return None
         else:
             try:
-                res = self.twapi[prog].update_status(
-                    status=mesg, in_reply_to_status_id=repl_id['id'], auto_populate_reply_metadata=True)
+                res = self.twapi[prog].create_tweet(
+                    text=mesg, in_reply_to_tweet_id=repl_id['id'])
                 self.log(f'Spotted: {mesg}')
-            except TwythonError as e:
-                self.log(f'Error: {e}')
-                res = None
+            except Exception as e:
+                self.log(f'Error:{prog} {mesg} {e}')
+                return None
 
-        return res
+        return res.data
 
     def toot_as_reply(self, prog, repl_id, mesg):
 
@@ -241,7 +249,7 @@ class MDSpotter:
         else:
             q_call = ""
 
-        q = f"select distinct callsign, ref from mdspots where prog = '{prog}' and {q_reg} {q_call} utc > {lastseen}"
+        q = f"select distinct callsign, ref from mdspots2 where prog = '{prog}' and {q_reg} {q_call} utc > {lastseen}"
 
         for i in self.cur.execute(q):
             (call, ref) = i
@@ -252,7 +260,7 @@ class MDSpotter:
             mloc = ''
             lastmode = None
 
-            q = f"select time, freq, mode, comment, spotter from mdspots where prog = '{prog}' and callsign = '{call}' and ref = '{ref}' and utc > {lastseen}"
+            q = f"select time, freq, mode, comment, spotter from mdspots2 where prog = '{prog}' and callsign = '{call}' and ref = '{ref}' and utc > {lastseen}"
 
             for j in self.cur2.execute(q):
                 (tm, freq, mode, comment, spotter) = j
@@ -352,11 +360,11 @@ class MDSpotter:
         else:
             q_freq = ""
 
-        q = f"select distinct callsign,ref from mdspots where prog = '{prog}' and {q_reg} {q_call} {q_freq} utc > {lastseen}"
+        q = f"select distinct callsign,ref from mdspots2 where prog = '{prog}' and {q_reg} {q_call} {q_freq} utc > {lastseen}"
 
         for s in self.cur.execute(q + ' order by utc desc'):
             (call, ref) = s
-            q = f"select time,callsign,freq,mode,comment from mdspots where callsign ='{call}' and ref='{ref}' and utc > {lastseen} order by utc desc"
+            q = f"select time,callsign,freq,mode,comment from mdspots2 where callsign ='{call}' and ref='{ref}' and utc > {lastseen} order by utc desc"
             l = self.cur2.execute(q)
             e = l.fetchone()
             (tm, call, freq, mode, comment) = e
@@ -386,10 +394,10 @@ class MDSpotter:
         else:
             q_mod = ""
 
-        reg_q_all = f"select ref,callsign,count(callsign) from mdspots' \
+        reg_q_all = f"select ref,callsign,count(callsign) from mdspots2' \
             ' where prog = '{prog}' and {q_reg} {q_call} {q_mod} utc > {now - twindow} group by ref, callsign order by utc"
 
-        reg_q_tweet = f"select ref,callsign,count(callsign) from mdspots' \
+        reg_q_tweet = f"select ref,callsign,count(callsign) from mdspots2' \
             ' where prog = '{prog}' and {q_reg} {q_call} {q_mod} tweeted = 1 and utc > {now - twindow} group by ref, callsign"
 
         refmap = {}
@@ -657,7 +665,7 @@ class MDSpotter:
                     rfreq = 0.0
 
                 if not self.is_selfspot(spotter, activator):
-                    q = f"select count(*) from mdspots where prog = '{prog}' and " \
+                    q = f"select count(*) from mdspots2 where prog = '{prog}' and " \
                         f"utc > {self.now - self.config[prog]['suppress_interval']} and " \
                         f"callsign = '{activator}' and ref = '{ref}' and " \
                         f"freq = {rfreq} and mode = '{mode}' and tweeted = 1"
@@ -683,13 +691,14 @@ class MDSpotter:
                     self.toot_as_reply(prog, None, mesg)
                     self.post_nostr_event(prog, None, mesg)
 
-                q = 'insert into mdspots(utc, time, prog, callsign, ref, name, freq, mode, loc, region, comment, spotter, tweeted) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                q = 'insert into mdspots2(utc, time, prog, callsign, ref, name, freq, rawfreq, mode, loc, region, comment, spotter, tweeted) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 self.cur.execute(q, (self.now, hhmm, prog, activator, ref, name,
-                                     rfreq, mode, loc, region, comment, spotter, 0 if skip_this else 1))
+                                     rfreq, freq, mode, loc, region, comment, spotter, 0 if skip_this else 1))
 
                 tlwindow = self.now - 3600 * 24 * \
                     self.config[prog]['storage_period']
-                self.cur.execute(f'delete from mdspots where utc < {tlwindow}')
+                self.cur.execute(
+                    f'delete from mdspots2 where utc < {tlwindow}')
 
             if spots:
                 self.lastid[prog] = max(int(i[tr['id']]) for i in spots)
