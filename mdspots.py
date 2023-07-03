@@ -4,6 +4,7 @@ import pickle
 import urllib.request
 import json
 import math
+from paho.mqtt import client as mqtt
 import os
 import pytz
 import re
@@ -74,6 +75,21 @@ class MDSpotter:
 
             self.lastid[p] = 0
 
+        def mqtt_onconnect(client, userdata, flags, rc):
+            if rc == 0:
+                self.log("Connected to MQTT Broker")
+            else:
+                self.log("Failed to connect MQTT Broker rc={rc}")
+
+        self.mqtt = mqtt.Client('SOTA-POTA-SpotService')
+        self.mqtt.username_pw_set(
+            self.config['mqttuser'], self.config['mqttpasswd'])
+        if self.config['mqttcert']:
+            self.mqtt.tls_set(ca_certs=self.config['mqttcert'])
+        self.mqtt.on_connect = mqtt_onconnect
+        self.mqtt.connect(self.config['mqttbroker'], self.config['mqttport'])
+        self.mqtt.loop_start()
+        
         self.db = sqlite3.connect(self.config['homedir'] + 'mdspots.db')
         self.cur = self.db.cursor()
         self.cur2 = self.db.cursor()
@@ -117,6 +133,10 @@ class MDSpotter:
         with open(self.config['logdir'] + self.config['logname'], mode='a') as f:
             print(f'{now}: {mesg}', file=f)
 
+    def mqtt_publish(self, topic, mesg):
+        res = self.mqtt.publish(topic, mesg)
+        self.log(f"MQTTPublish({res}): {mesg} to {topic}")
+        
     def tweet_as_reply(self, prog, repl_id, mesg):
 
         if not self.twapi[prog]:
@@ -128,7 +148,7 @@ class MDSpotter:
                 res = self.twapi[prog].create_tweet(text=mesg)
                 self.log(f'Spotted: {mesg}')
             except Exception as e:
-                self.log(f'Error: {prog} {mesg} : {e}')
+                self.log(f'Warning: {prog} {mesg} : {e}')
                 return None
         else:
             try:
@@ -136,7 +156,7 @@ class MDSpotter:
                     text=mesg, in_reply_to_tweet_id=repl_id['id'])
                 self.log(f'Spotted: {mesg}')
             except Exception as e:
-                self.log(f'Error:{prog} {mesg} {e}')
+                self.log(f'Warning:{prog} {mesg} {e}')
                 return None
 
         return res.data
@@ -208,14 +228,18 @@ class MDSpotter:
                 raise e
 
     def refNamequery(self, refid):
-        res = self.getJSON('sotalive', 'getref', refid)
-        if res['counts'] == 0:
-            return (refid, refid)
+        m = re.match(r'JA*', refid)
+        if m:
+            res = self.getJSON('sotalive', 'getref', refid)
+            if res['counts'] == 0:
+                return (refid, None)
+            else:
+                name = res['reference'][0]['name']
+                name_k = re.sub(r'\(.+\)|（.+）', '', res['reference'][0]['name_k'])
+                return (name, name_k)
         else:
-            name = res['reference'][0]['name']
-            name_k = re.sub(r'\(.+\)|（.+）', '', res['reference'][0]['name_k'])
-            return (name, name_k)
-
+            return (refid, None)
+        
     def freqstr(self, f):
         if f < 4000:
             s = f"{f/1000:.1f}"
@@ -679,18 +703,35 @@ class MDSpotter:
                 else:
                     skip_this = False
 
-                m = re.match(self.config[prog]['filter'], ref)
-                if not skip_this and m:
+
+                if not skip_this:
                     if prog == 'pota':
                         (_, name_k) = self.refNamequery(ref)
-                        mesg = f'{hhmm} {activator} on {ref}({name_k} {name}, {loc}) {freq} {mode} {comment}[{spotter}]'
+                        if name_k:
+                            mesg = f'{hhmm} {activator} on {ref}({name_k} {name}, {loc}) {freq} {mode} {comment}[{spotter}]'
+                        else:
+                            mesg = f'{hhmm} {activator} on {ref}({name}, {loc}) {freq} {mode} {comment}[{spotter}]'
                     else:
                         mesg = f'{hhmm} {activator} on {ref}({name}) {freq} {mode} {comment}[{spotter}]'
 
-                    self.tweet_as_reply(prog, None, mesg)
-                    self.toot_as_reply(prog, None, mesg)
-                    self.post_nostr_event(prog, None, mesg)
+                    m = re.match(self.config[prog]['filter'], ref)
+                    if m:
+                        if self.config[prog]['enable_tweet']:
+                            self.tweet_as_reply(prog, None, mesg)
+                        
+                        if self.config[prog]['enable_toot']:
+                            self.toot_as_reply(prog, None, mesg)
+                        
+                        if self.config[prog]['enable_nostr']:
+                            self.post_nostr_event(prog, None, mesg)
 
+                    if self.config[prog]['enable_mqtt']:
+                        it = iter(self.config[prog]['mqtt_topic'])
+                        for topic, pat in zip(it, it):
+                            m = re.match(pat, ref)
+                            if m:
+                                self.mqtt_publish(topic, mesg)
+                    
                 q = 'insert into mdspots2(utc, time, prog, callsign, ref, name, freq, rawfreq, mode, loc, region, comment, spotter, tweeted) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 self.cur.execute(q, (self.now, hhmm, prog, activator, ref, name,
                                      rfreq, freq, mode, loc, region, comment, spotter, 0 if skip_this else 1))

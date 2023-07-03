@@ -6,36 +6,52 @@ logname = 'potaspots.log'
 localtz = "Asia/Tokyo"
 alerts = "08:00"
 summary = "21:00"
-nostr_relay_servers = [ "wss://nostr.mom", "wss://relay.damus.io", "wss://nostr-pub.wellorder.net", "wss://nos.lol"]
+nostr_relay_servers = [ "wss://no.str.cr", "wss://nostr.mom", "wss://relay.damus.io", "wss://nostr-pub.wellorder.net", "wss://nos.lol", "wss://nostr.bitcoiner.social"]
+
+mqttbroker = 'localhost'
+mqttport = 1883
+mqttuser = ''
+mqttpasswd = ''
+mqttcert = ''
 
 [config.pota]
+enable_tweet = false
+enable_toot = false
+enable_nostr = true
+enable_mqtt = true
 summary = 21
-suppress_interval = 900
+suppress_interval = 7200
 storage_period =  7
 filter =  'JA*'
+mqtt_topic = [ 'spot/pota/ja','JA*','spot/pota/k','K*' ]
 
 [config.sota]
+enable_tweet = false
+enable_toot = false
+enable_nostr = true
+enable_mqtt = true
 summary = 21
-suppress_interval = 60
+suppress_interval = 7200
 storage_period = 7
 filter =  'JA*'
+mqtt_topic = [ 'spot/sota/ja', 'JA*' ]
 
 [accesskeys.pota] 
+bearer=''
 consumer = ''
 consumer_sec = ''
 access = ''
 access_sec = ''
 mastodon_access_token = ''
-mastodon_api_base_url = 'https://mstdn.jp'
+mastodon_api_base_url = ''
 nostr_private_key = ''
 
 [accesskeys.sota]
+bearer=''
 consumer = ''
 consumer_sec = ''
 access = ''
 access_sec = ''
 mastodon_access_token = ''
-mastodon_api_base_url = 'https://mstdn.jp'
+mastodon_api_base_url = ''
 nostr_private_key = ''
-
-
