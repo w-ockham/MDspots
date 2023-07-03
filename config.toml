@@ -22,8 +22,8 @@ enable_mqtt = true
 summary = 21
 suppress_interval = 7200
 storage_period =  7
-filter =  'JA*'
-mqtt_topic = [ 'spot/pota/ja','JA*','spot/pota/k','K*' ]
+filter =  'JA.*'
+mqtt_topic = [ 'spot/pota/ja','JA.*','spot/pota/k','K.*' ]
 
 [config.sota]
 enable_tweet = false
@@ -33,8 +33,8 @@ enable_mqtt = true
 summary = 21
 suppress_interval = 7200
 storage_period = 7
-filter =  'JA*'
-mqtt_topic = [ 'spot/sota/ja', 'JA*' ]
+filter =  'JA.*'
+mqtt_topic = [ 'spot/sota/ja', 'JA.*' ]
 
 [accesskeys.pota] 
 bearer=''
