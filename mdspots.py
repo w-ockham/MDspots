@@ -89,11 +89,14 @@ class MDSpotter:
         self.mqtt.on_connect = mqtt_onconnect
         self.mqtt.connect(self.config['mqttbroker'], self.config['mqttport'])
         self.mqtt.loop_start()
-        
+
         self.db = sqlite3.connect(self.config['homedir'] + 'mdspots.db')
         self.cur = self.db.cursor()
         self.cur2 = self.db.cursor()
         self.now = int(datetime.utcnow().strftime("%s"))
+
+        self.mqttdb = sqlite3.connect(self.config['mqttdb'])
+        self.mqttcur = self.mqttdb.cursor()
 
         q = 'create table if not exists mdspots2(utc int, time text, prog text, callsign text, ' \
             'ref txt, name text, freq real, rawfreq text, mode text, loc text, region text, comment text, spotter text, tweeted int)'
@@ -136,7 +139,26 @@ class MDSpotter:
     def mqtt_publish(self, topic, mesg):
         res = self.mqtt.publish(topic, mesg)
         self.log(f"MQTTPublish({res}): {mesg} to {topic}")
-        
+
+    def mqtt_publish_client(self, topic, mesg_json):
+
+        self.mqttcur.execute('select * from mqttuser')
+        mqttuser = self.mqttcur.fetchall()
+
+        for (uuid, time) in mqttuser:
+            ref = mesg_json['ref']
+            q = 'select * from potalog where uuid = ? and ref = ?'
+            self.mqttcur.execute(q, (uuid, ref,))
+            r = self.mqttcur.fetchall()
+            mesg_json['qso'] = len(r)
+            if len(r):
+                mesg_json['qsod'] = r[0][4]
+            else:
+                mesg_json['qsod'] = ''
+            mesg = json.dumps(mesg_json)
+            res = self.mqtt.publish(uuid + '/' + topic, mesg)
+            self.log(f"MQTTPublish({res}): {mesg} to {uuid}/{topic}")
+
     def tweet_as_reply(self, prog, repl_id, mesg):
 
         if not self.twapi[prog]:
@@ -228,18 +250,19 @@ class MDSpotter:
                 raise e
 
     def refNamequery(self, refid):
-        m = re.match(r'JA*', refid)
+        m = re.match(r'JA.*', refid)
         if m:
             res = self.getJSON('sotalive', 'getref', refid)
             if res['counts'] == 0:
                 return (refid, None)
             else:
                 name = res['reference'][0]['name']
-                name_k = re.sub(r'\(.+\)|（.+）', '', res['reference'][0]['name_k'])
+                name_k = re.sub(r'\(.+\)|（.+）', '',
+                                res['reference'][0]['name_k'])
                 return (name, name_k)
         else:
             return (refid, None)
-        
+
     def freqstr(self, f):
         if f < 4000:
             s = f"{f/1000:.1f}"
@@ -703,8 +726,8 @@ class MDSpotter:
                 else:
                     skip_this = False
 
-
                 if not skip_this:
+
                     if prog == 'pota':
                         (_, name_k) = self.refNamequery(ref)
                         if name_k:
@@ -713,15 +736,18 @@ class MDSpotter:
                             mesg = f'{hhmm} {activator} on {ref}({name}, {loc}) {freq} {mode} {comment}[{spotter}]'
                     else:
                         mesg = f'{hhmm} {activator} on {ref}({name}) {freq} {mode} {comment}[{spotter}]'
+                    mesg_json = {'tm': hhmm, 'act': activator,
+                                 'ref': ref, 'nm': name, 'frq': freq,
+                                 'md': mode, 'cmt': comment, 'sp': spotter}
 
                     m = re.match(self.config[prog]['filter'], ref)
                     if m:
                         if self.config[prog]['enable_tweet']:
                             self.tweet_as_reply(prog, None, mesg)
-                        
+
                         if self.config[prog]['enable_toot']:
                             self.toot_as_reply(prog, None, mesg)
-                        
+
                         if self.config[prog]['enable_nostr']:
                             self.post_nostr_event(prog, None, mesg)
 
@@ -731,7 +757,8 @@ class MDSpotter:
                             m = re.match(pat, ref)
                             if m:
                                 self.mqtt_publish(topic, mesg)
-                    
+                                self.mqtt_publish_client(topic, mesg_json)
+
                 q = 'insert into mdspots2(utc, time, prog, callsign, ref, name, freq, rawfreq, mode, loc, region, comment, spotter, tweeted) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 self.cur.execute(q, (self.now, hhmm, prog, activator, ref, name,
                                      rfreq, freq, mode, loc, region, comment, spotter, 0 if skip_this else 1))
@@ -743,9 +770,13 @@ class MDSpotter:
 
             if spots:
                 self.lastid[prog] = max(int(i[tr['id']]) for i in spots)
-                self.log(f'Latest {prog} spot id{self.lastid[prog]}.')
+                mesg = f'Latest {prog} spot id{self.lastid[prog]}.'
             else:
-                self.log(f'No {prog} spots since id{self.lastid[prog]}.')
+                mesg = f'No {prog} spots since id{self.lastid[prog]}.'
+
+            self.log(mesg)
+            if self.config[prog]['enable_mqtt']:
+                self.mqtt_publish('debug', mesg)
 
             self.db.commit()
 
