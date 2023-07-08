@@ -1,8 +1,8 @@
 [config]   
 interval = 70
 homedir = '/home/your/home'
-logdir = '/var/log/yourlog/'
-logname = 'potaspots.log'
+logdir = '/var/log/yourlog'
+logname = 'potaspot.log'
 localtz = "Asia/Tokyo"
 alerts = "08:00"
 summary = "21:00"
@@ -13,6 +13,7 @@ mqttport = 1883
 mqttuser = ''
 mqttpasswd = ''
 mqttcert = ''
+mqttdb = '/home/your/databese/mqtt.db'
 
 [config.pota]
 enable_tweet = false
@@ -43,7 +44,7 @@ consumer_sec = ''
 access = ''
 access_sec = ''
 mastodon_access_token = ''
-mastodon_api_base_url = ''
+mastodon_api_base_url = 'https://mstdn.jp'
 nostr_private_key = ''
 
 [accesskeys.sota]
@@ -53,5 +54,5 @@ consumer_sec = ''
 access = ''
 access_sec = ''
 mastodon_access_token = ''
-mastodon_api_base_url = ''
+mastodon_api_base_url = 'https://mstdn.jp'
 nostr_private_key = ''
