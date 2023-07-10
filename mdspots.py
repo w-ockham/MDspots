@@ -141,12 +141,17 @@ class MDSpotter:
         self.log(f"MQTTPublish({res}): {mesg} to {topic}")
 
     def mqtt_publish_client(self, topic, mesg_json):
+        mesg_json['qso'] = 0
+        mesg_json['qsod'] = ""
+        mesg = json.dumps(mesg_json)
+        res = self.mqtt.publish('js/'+ topic, mesg)
+        self.log(f"MQTTPublish({res}): {mesg} to js/{topic}")
 
         self.mqttcur.execute('select * from mqttuser')
         mqttuser = self.mqttcur.fetchall()
 
         for (uuid, time) in mqttuser:
-            ref = mesg_json['ref']
+            ref = mesg_json['refid']
             q = 'select * from potalog where uuid = ? and ref = ?'
             self.mqttcur.execute(q, (uuid, ref,))
             r = self.mqttcur.fetchall()
@@ -159,6 +164,7 @@ class MDSpotter:
             res = self.mqtt.publish(uuid + '/' + topic, mesg)
             self.log(f"MQTTPublish({res}): {mesg} to {uuid}/{topic}")
 
+        
     def tweet_as_reply(self, prog, repl_id, mesg):
 
         if not self.twapi[prog]:
@@ -737,8 +743,8 @@ class MDSpotter:
                     else:
                         mesg = f'{hhmm} {activator} on {ref}({name}) {freq} {mode} {comment}[{spotter}]'
                     mesg_json = {'tm': hhmm, 'act': activator,
-                                 'ref': ref, 'nm': name, 'frq': freq,
-                                 'md': mode, 'cmt': comment, 'sp': spotter}
+                                 'refid': ref, 'name': name, 'freq': freq,
+                                 'mode': mode, 'cmt': comment, 'spt': spotter}
 
                     m = re.match(self.config[prog]['filter'], ref)
                     if m:
